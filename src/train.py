@@ -41,15 +41,15 @@ def build_ensemble() -> VotingClassifier:
         ("clf", LogisticRegression(max_iter=1000, C=1.0)),   # TUNE: C
     ])
     gboost = GradientBoostingClassifier(
-        n_estimators=200,          # TUNE
+        n_estimators=50,          # TUNE
         learning_rate=0.05,        # TUNE
-        max_depth=3,               # TUNE
+        max_depth=2,               # TUNE
     )
     # soft voting averages predicted probabilities -> calibrated-ish output
     return VotingClassifier(
         estimators=[("logreg", logreg), ("gboost", gboost)],
         voting="soft",
-        weights=[1, 1],            # TUNE: try [2, 1] etc.
+        weights=[3, 1],            # TUNE: try [2, 1] etc.
     )
 
 
