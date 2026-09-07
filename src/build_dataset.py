@@ -1,5 +1,5 @@
 """
-STEP 3 — Join FEATURES to LABELS into one model-ready table.
+STEP 3 — Join FEATURES to LABELS into one model-ready table. Turn team profiles + game results into a model-ready table.
 
 Inputs:
     data/raw/games_<season>.csv     (from src.fetch_games)
@@ -8,8 +8,17 @@ Inputs:
 Leakage rule: features come from season N, labels come from season N+1 games.
 A team's season-N stats must never be built from the games you are predicting.
 
+The leakage rule (READ THIS):
+    To predict a game in season N, only use team strength from season N-1.
+    Using the SAME season's end-of-year stats to predict that season's games
+    leaks the answer (the stats already "saw" those games). We avoid it by
+    pairing season N-1 profiles with season N games.
+
+Output: data/processed/dataset.csv  — one row per game, with diff features + label.
+
 Run:  python -m src.build_dataset
 """
+
 import pandas as pd
 
 from src import config
@@ -36,3 +45,96 @@ FRANCHISE_ALIASES = {
 def canonical_team(abbrev: str) -> str:
     """Map a historical team abbreviation onto its present-day franchise code."""
     return FRANCHISE_ALIASES.get(abbrev, abbrev)
+
+
+def load_team_profiles(season: int) -> pd.DataFrame:
+    """Load one season's teams.csv and return a clean per-team feature row.
+
+    Filters to the season-total, even-strength-inclusive line:
+        situation == "all"   (and the team-level row)
+    Then builds per-game rates from counting stats.
+    Index the result by team abbreviation so lookups are easy.
+    """
+    path = config.RAW / f"teams_{season}.csv"
+    df = pd.read_csv(path)
+
+    # MoneyPuck's teams.csv has a duplicated 'team' header column; pandas
+    # renames the second occurrence to 'team.1'. We only ever reference
+    # 'team' (the first), so 'team.1' is simply ignored below.
+    df = df[df["situation"] == "all"].copy()
+
+    feature_cols = list(config.TEAM_PCT_FEATURES) + list(config.TEAM_COUNT_FEATURES)
+    required = ["team", "games_played"] + feature_cols
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise KeyError(f"teams_{season}.csv is missing expected columns: {missing}")
+
+    # Guard against any stray duplicate team rows, then index by team code.
+    df = df.drop_duplicates(subset="team", keep="first").set_index("team")
+
+    features = df[config.TEAM_PCT_FEATURES].astype(float).copy()
+    for col in config.TEAM_COUNT_FEATURES:
+        features[f"{col}_pg"] = df[col] / df["games_played"]
+
+    # Franchise-alias the FEATURE side so e.g. season-N-1 "ARI" stats line up
+    # with season-N "UTA" games (see FRANCHISE_ALIASES / canonical_team above).
+    features.index = features.index.map(canonical_team)
+    features.index.name = "team"
+    return features
+
+
+def make_game_features(games: pd.DataFrame, prior: pd.DataFrame) -> pd.DataFrame:
+    """Join each game to the PRIOR-season profiles of its home & away teams,
+    then create difference features (home minus away) + a home-ice constant.
+
+    Difference features work well here: the model cares about the GAP in
+    strength between the two teams, not their absolute levels.
+    """
+    known = games["home"].isin(prior.index) & games["away"].isin(prior.index)
+    dropped = int((~known).sum())
+    if dropped:
+        print(f"[info] dropping {dropped} game(s) with a team missing from prior-season profiles")
+    games = games.loc[known].reset_index(drop=True)
+
+    # Row-aligned lookups: home_feats.iloc[i] / away_feats.iloc[i] are the
+    # prior-season profiles for games.iloc[i]'s home/away teams.
+    home_feats = prior.loc[games["home"]].reset_index(drop=True)
+    away_feats = prior.loc[games["away"]].reset_index(drop=True)
+
+    diffs = home_feats.subtract(away_feats)
+    diffs.columns = [f"diff_{c}" for c in diffs.columns]
+
+    out = pd.concat([games[["game_id", "season"]], diffs], axis=1)
+    out["home_ice"] = 1
+    out["home_win"] = games["home_win"]
+    return out
+
+
+def main() -> None:
+    config.PROCESSED.mkdir(parents=True, exist_ok=True)
+    frames = []
+
+    # Pair season N games with season N-1 profiles.
+    for season in config.SEASONS:
+        prior_season = season - 1
+        try:
+            games = pd.read_csv(config.RAW / f"games_{season}.csv")
+            prior = load_team_profiles(prior_season)
+            frames.append(make_game_features(games, prior))
+        except (FileNotFoundError, NotImplementedError, KeyError) as e:
+            print(f"[skip] {season}: {type(e).__name__}: {e}")
+            continue
+
+    if not frames:
+        print("Nothing built yet — implement the TODOs and download the seasons.")
+        return
+
+    dataset = pd.concat(frames, ignore_index=True)
+    out = config.PROCESSED / "dataset.csv"
+    dataset.to_csv(out, index=False)
+    print(f"[ok] wrote {len(dataset)} game-rows, "
+          f"{dataset['season'].nunique()} seasons -> {out}")
+
+
+if __name__ == "__main__":
+    main()
