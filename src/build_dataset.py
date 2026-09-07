@@ -31,9 +31,13 @@ from src import config
 # overlap. The roster and hockey operations carried over intact, so Arizona's
 # prior-season team stats are the legitimate feature row for Utah's next season.
 #
-# Apply this to the FEATURE side only, so season-N "ARI" stats line up with
-# season-N+1 "UTA" games. Leave data/raw/ untouched — it stays a faithful
-# record of what each source actually returned.
+# Both games_<season>.csv and teams_<season>.csv keep whatever code the
+# franchise actually used that season, so "ARI" and "UTA" each show up on
+# BOTH the games side and the profiles side depending on the year (only the
+# one season that straddles the move needs translating). canonical_team is
+# therefore applied to both join keys at lookup time in make_game_features,
+# not baked into either source. Leave data/raw/ untouched — it stays a
+# faithful record of what each source actually returned.
 # ---------------------------------------------------------------------------
 FRANCHISE_ALIASES = {
     "ARI": "UTA",   # Arizona Coyotes -> Utah (2024-25 onward)
@@ -76,9 +80,6 @@ def load_team_profiles(season: int) -> pd.DataFrame:
     for col in config.TEAM_COUNT_FEATURES:
         features[f"{col}_pg"] = df[col] / df["games_played"]
 
-    # Franchise-alias the FEATURE side so e.g. season-N-1 "ARI" stats line up
-    # with season-N "UTA" games (see FRANCHISE_ALIASES / canonical_team above).
-    features.index = features.index.map(canonical_team)
     features.index.name = "team"
     return features
 
@@ -90,6 +91,19 @@ def make_game_features(games: pd.DataFrame, prior: pd.DataFrame) -> pd.DataFrame
     Difference features work well here: the model cares about the GAP in
     strength between the two teams, not their absolute levels.
     """
+    # Normalize BOTH sides of the join through canonical_team. A relocation
+    # like ARI->UTA can land on either side depending on the season: games
+    # and profiles from before the move both say "ARI", games and profiles
+    # from after both say "UTA", and only the one pairing that straddles the
+    # move (season-N games in the new code vs. season-N-1 profiles in the
+    # old code) actually needs translating. Mapping both sides through the
+    # same alias table handles all three cases with one rule instead of
+    # guessing which side is stale.
+    games = games.copy()
+    games["home"] = games["home"].map(canonical_team)
+    games["away"] = games["away"].map(canonical_team)
+    prior = prior.rename(index=canonical_team)
+
     known = games["home"].isin(prior.index) & games["away"].isin(prior.index)
     dropped = int((~known).sum())
     if dropped:
@@ -106,7 +120,10 @@ def make_game_features(games: pd.DataFrame, prior: pd.DataFrame) -> pd.DataFrame
 
     out = pd.concat([games[["game_id", "season"]], diffs], axis=1)
     out["home_ice"] = 1
-    out["home_win"] = games["home_win"]
+    # Unplayed games (a future schedule) carry no label — the same feature
+    # code then serves both training and prediction.
+    if "home_win" in games.columns:
+        out["home_win"] = games["home_win"]
     return out
 
 
