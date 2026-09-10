@@ -166,13 +166,27 @@ claims happen to agree here. These tables are diagnostics, deliberately **not wi
 conference and league, then findings and next steps. Writes
 `data/processed/projected_standings_2026.csv`.
 
-```
-  PRESIDENTS' TROPHY FAVOURITE          DIVISION WINNERS
-    COL   116.7 pts  (53.5-20.8-9.7)      Atlantic      TBL   104.7
-                                          Metropolitan  CAR   108.8
-  PROJECTED CELLAR                        Central       COL   116.7
-    VAN    75.8 pts                       Pacific       VGK   102.5
-```
+| # | Team | Division | PTS | # | Team | Division | PTS |
+|---|---|---|---|---|---|---|---|
+| 1 | COL | Central | **116.7** | 17 | LAK | Pacific | 93.4 |
+| 2 | CAR | Metropolitan | 108.8 | 18 | NJD | Metropolitan | 93.2 |
+| 3 | TBL | Atlantic | 104.7 | 19 | PHI | Metropolitan | 93.0 |
+| 4 | VGK | Pacific | 102.5 | 20 | CBJ | Metropolitan | 92.2 |
+| 5 | OTT | Atlantic | 101.8 | 21 | BOS | Atlantic | 91.6 |
+| 6 | UTA | Central | 100.4 | 22 | WPG | Central | 89.6 |
+| 7 | MTL | Atlantic | 100.0 | 23 | DET | Atlantic | 89.1 |
+| 8 | EDM | Pacific | 99.7 | 24 | NYR | Metropolitan | 88.3 |
+| 9 | DAL | Central | 99.6 | 25 | NSH | Central | 86.8 |
+| 10 | WSH | Metropolitan | 97.9 | 26 | SJS | Pacific | 86.0 |
+| 11 | BUF | Atlantic | 96.5 | 27 | STL | Central | 86.0 |
+| 12 | PIT | Metropolitan | 95.7 | 28 | CGY | Pacific | 85.5 |
+| 13 | MIN | Central | 95.3 | 29 | TOR | Atlantic | 82.9 |
+| 14 | ANA | Pacific | 94.5 | 30 | SEA | Pacific | 82.8 |
+| 15 | NYI | Metropolitan | 94.3 | 31 | CHI | Central | 78.6 |
+| 16 | FLA | Atlantic | 93.8 | 32 | VAN | Pacific | **75.8** |
+
+Full breakdown (W/L/OTL) is in `data/processed/projected_standings_2026.csv`, produced by
+the same run.
 
 Projected wins = the **sum of a team's per-game win probabilities** (home games contribute `p`, road
 `1-p`), which yields the mean of the win distribution without a Monte Carlo loop. 2026-27 is an
