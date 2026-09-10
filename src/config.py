@@ -55,6 +55,30 @@ TEAMS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Divisional alignment, used to group projected standings.
+# Utah inherited Arizona's Central Division slot for 2024-25.
+# ---------------------------------------------------------------------------
+CONFERENCES = {"Eastern": ["Atlantic", "Metropolitan"],
+               "Western": ["Central", "Pacific"]}
+
+DIVISIONS = {
+    "Atlantic":     ["BOS", "BUF", "DET", "FLA", "MTL", "OTT", "TBL", "TOR"],
+    "Metropolitan": ["CAR", "CBJ", "NJD", "NYI", "NYR", "PHI", "PIT", "WSH"],
+    "Central":      ["CHI", "COL", "DAL", "MIN", "NSH", "STL", "UTA", "WPG"],
+    "Pacific":      ["ANA", "CGY", "EDM", "LAK", "SEA", "SJS", "VAN", "VGK"],
+}
+
+TEAM_DIVISION = {t: d for d, ts in DIVISIONS.items() for t in ts}
+TEAM_CONFERENCE = {t: c for c, ds in CONFERENCES.items()
+                   for d in ds for t in DIVISIONS[d]}
+
+# Share of NHL games that reach overtime/shootout. The loser of one of those
+# games still banks a point (an "OTL"), so this splits projected losses into
+# regulation losses vs. OT losses for the points column. League-average
+# constant, NOT something the model predicts per-team.
+OT_GAME_RATE = 0.23
+
+# ---------------------------------------------------------------------------
 # Feature columns pulled from teams.csv (situation == "all", position "Team Level").
 # Start small and defensible. Add more once the baseline works.
 # These are RATE-friendly or already percentages; you'll divide counts by
